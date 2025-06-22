@@ -41,6 +41,7 @@ class CamadaEnlace:
 
 class Enlace:
     def __init__(self, linha_serial):
+        self.buffer = b"" # Foi necessário a adição de um buffer
         self.linha_serial = linha_serial
         self.linha_serial.registrar_recebedor(self.__raw_recv)
 
@@ -48,17 +49,27 @@ class Enlace:
         self.callback = callback
 
     def enviar(self, datagrama):
-        # TODO: Preencha aqui com o código para enviar o datagrama pela linha
-        # serial, fazendo corretamente a delimitação de quadros e o escape de
-        # sequências especiais, de acordo com o protocolo CamadaEnlace (RFC 1055).
-        pass
+        #Segundo passo
+        esc_datagrama = datagrama.replace(b'\xDB', b'\xDB\xDD')
+        esc_datagrama = esc_datagrama.replace(b'\xC0', b'\xDB\xDC')
+        #Primeiro passo
+        comeco_datagrama = b'\xC0' + esc_datagrama
+        completo_datagrama = comeco_datagrama + b'\xC0'
+        self.linha_serial.enviar(completo_datagrama)
 
     def __raw_recv(self, dados):
-        # TODO: Preencha aqui com o código para receber dados da linha serial.
-        # Trate corretamente as sequências de escape. Quando ler um quadro
-        # completo, repasse o datagrama contido nesse quadro para a camada
-        # superior chamando self.callback. Cuidado pois o argumento dados pode
-        # vir quebrado de várias formas diferentes - por exemplo, podem vir
-        # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
-        # pedaço de outro, ou vários quadros de uma vez só.
-        pass
+        # Quarto passo
+        partes = dados.split(b'\xC0')
+        while partes:
+            self.buffer += partes.pop(0)
+            if self.buffer and partes:
+                self.buffer = self.buffer.replace(b'\xDB\xDC', b'\xC0').replace(b'\xDB\xDD', b'\xDB')
+            # Terceiro passo
+                try:
+                    self.callback(self.buffer)
+                except Exception:
+                    # Quinto passo
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    self.buffer = b''
